@@ -70,6 +70,39 @@ export class Avatar {
     }
     this.tl = keys; this.t0 = performance.now(); this.lastSg = undefined;
   }
+  // Mano: palma y dedos como una sola silueta (primero todo el contorno, luego todo el relleno,
+  // así las articulaciones no quedan rayadas). El grosor sale del tamaño de la mano.
+  mano(p, piel, borde, brillo) {
+    const x = this.x, d = (a, b) => Math.hypot(p[a][0] - p[b][0], p[a][1] - p[b][1]);
+    const t = Math.max(4, Math.min(d(0, 9), d(5, 17) * 1.8) * 0.2);        // grosor de un dedo
+    const dedos = [[1, 2, 3, 4, 1.15], [5, 6, 7, 8, 1], [9, 10, 11, 12, 1.03], [13, 14, 15, 16, 0.95], [17, 18, 19, 20, 0.82]];
+    const palma = [0, 1, 5, 9, 13, 17];
+    const capa = (color, extra) => {
+      x.fillStyle = x.strokeStyle = color; x.lineCap = x.lineJoin = 'round';
+      x.lineWidth = t * 0.9 + extra;
+      x.beginPath(); palma.forEach((j, i) => i ? x.lineTo(...p[j]) : x.moveTo(...p[j])); x.closePath(); x.fill(); x.stroke();
+      for (const f of dedos) {
+        // dedo afinándose hacia la punta: un trazo por falange
+        for (let i = 0; i < 3; i++) {
+          x.lineWidth = t * f[4] * (1 - i * 0.1) + extra;
+          x.beginPath(); x.moveTo(...p[f[i]]); x.lineTo(...p[f[i + 1]]); x.stroke();
+        }
+      }
+    };
+    capa(borde, 3);
+    capa(piel, 0);
+    // pliegues suaves de los nudillos y uñas luminosas
+    x.strokeStyle = borde; x.globalAlpha *= 0.35; x.lineWidth = 1;
+    for (const f of dedos) for (const j of [f[1], f[2]]) {
+      const [ax, ay] = p[j], [bx, by] = p[j + 1], L = Math.hypot(bx - ax, by - ay) || 1;
+      const nx = -(by - ay) / L * t * 0.3, ny = (bx - ax) / L * t * 0.3;
+      x.beginPath(); x.moveTo(ax - nx, ay - ny); x.lineTo(ax + nx, ay + ny); x.stroke();
+    }
+    x.globalAlpha /= 0.35;
+    x.save(); x.shadowColor = brillo; x.shadowBlur = 8; x.fillStyle = brillo;
+    for (const f of dedos) { const [px, py] = p[f[3]]; x.beginPath(); x.arc(px, py, t * 0.22, 0, Math.PI * 2); x.fill(); }
+    x.restore();
+  }
   draw() {
     const r = this.c.getBoundingClientRect();
     if (!r.width || !r.height) return;                 // pestaña oculta
@@ -157,19 +190,7 @@ export class Avatar {
       x.restore();
       x.strokeStyle = ropa; x.lineWidth = SW * 0.15;
       x.beginPath(); x.moveTo(h[0], hy(h[1])); x.quadraticCurveTo(codo[0], codo[1], w[0], w[1]); x.stroke();
-      // mano: palma + dedos con contorno
-      x.fillStyle = piel; x.strokeStyle = borde; x.lineWidth = 2;
-      x.beginPath(); for (const j of [0, 1, 5, 9, 13, 17]) x.lineTo(p[j][0], p[j][1]); x.closePath(); x.fill(); x.stroke();
-      for (const [a, b] of CONN) {
-        x.strokeStyle = borde; x.lineWidth = SW * 0.075;
-        x.beginPath(); x.moveTo(...p[a]); x.lineTo(...p[b]); x.stroke();
-        x.strokeStyle = piel; x.lineWidth = SW * 0.055;
-        x.beginPath(); x.moveTo(...p[a]); x.lineTo(...p[b]); x.stroke();
-      }
-      // puntas de los dedos luminosas
-      x.save(); x.shadowColor = brillo; x.shadowBlur = 10; x.fillStyle = brillo;
-      for (const j of [4, 8, 12, 16, 20]) { x.beginPath(); x.arc(p[j][0], p[j][1], SW * 0.018, 0, Math.PI * 2); x.fill(); }
-      x.restore();
+      this.mano(p, piel, borde, brillo);
       x.globalAlpha = 1;
     }
   }
